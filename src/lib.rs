@@ -38,8 +38,6 @@ use core::{
 
 use as_slice::{AsMutSlice, AsSlice};
 
-mod sealed;
-
 /// 2-byte alignment
 #[derive(Clone, Copy)]
 #[repr(align(2))]
@@ -91,7 +89,6 @@ pub const fn Aligned<A, T>(value: T) -> Aligned<A, T> {
 
 impl<A, T> ops::Deref for Aligned<A, T>
 where
-    A: sealed::Alignment,
     T: ?Sized,
 {
     type Target = T;
@@ -103,7 +100,6 @@ where
 
 impl<A, T> ops::DerefMut for Aligned<A, T>
 where
-    A: sealed::Alignment,
     T: ?Sized,
 {
     fn deref_mut(&mut self) -> &mut T {
@@ -112,8 +108,6 @@ where
 }
 
 impl<A, T> ops::Index<ops::RangeTo<usize>> for Aligned<A, [T]>
-where
-    A: sealed::Alignment,
 {
     type Output = Aligned<A, [T]>;
 
@@ -124,7 +118,6 @@ where
 
 impl<A, T> AsSlice for Aligned<A, T>
 where
-    A: sealed::Alignment,
     T: AsSlice,
 {
     type Element = T::Element;
@@ -136,7 +129,6 @@ where
 
 impl<A, T> AsMutSlice for Aligned<A, T>
 where
-    A: sealed::Alignment,
     T: AsMutSlice,
 {
     fn as_mut_slice(&mut self) -> &mut [T::Element] {
@@ -146,7 +138,7 @@ where
 
 impl<A, T> Clone for Aligned<A, T>
 where
-    A: sealed::Alignment,
+    A: Clone,
     T: Clone,
 {
     fn clone(&self) -> Self {
@@ -159,14 +151,13 @@ where
 
 impl<A, T> Copy for Aligned<A, T>
 where
-    A: sealed::Alignment,
+    A: Copy,
     T: Copy,
 {
 }
 
 impl<A, T> Default for Aligned<A, T>
 where
-    A: sealed::Alignment,
     T: Default,
 {
     fn default() -> Self {
@@ -179,7 +170,6 @@ where
 
 impl<A, T> Debug for Aligned<A, T>
 where
-    A: sealed::Alignment,
     T: Debug,
 {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
@@ -189,7 +179,6 @@ where
 
 impl<A, T> Display for Aligned<A, T>
 where
-    A: sealed::Alignment,
     T: Display,
 {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
@@ -199,7 +188,6 @@ where
 
 impl<A, T> PartialEq for Aligned<A, T>
 where
-    A: sealed::Alignment,
     T: PartialEq,
 {
     fn eq(&self, other: &Self) -> bool {
@@ -209,14 +197,12 @@ where
 
 impl<A, T> Eq for Aligned<A, T>
 where
-    A: sealed::Alignment,
     T: Eq,
 {
 }
 
 impl<A, T> Hash for Aligned<A, T>
 where
-    A: sealed::Alignment,
     T: Hash,
 {
     fn hash<H: Hasher>(&self, state: &mut H) {
@@ -226,7 +212,6 @@ where
 
 impl<A, T> Ord for Aligned<A, T>
 where
-    A: sealed::Alignment,
     T: Ord,
 {
     fn cmp(&self, other: &Self) -> Ordering {
@@ -236,7 +221,6 @@ where
 
 impl<A, T> PartialOrd for Aligned<A, T>
 where
-    A: sealed::Alignment,
     T: PartialOrd,
 {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
@@ -301,4 +285,38 @@ fn sanity() {
     let x: Aligned<A2, _> = Aligned([0u8; 3]);
     let y: &Aligned<A2, [u8]> = &x;
     let _: &[u8] = y;
+
+    // test aligning byte buffer with header struct
+    struct Header {
+        a: u16,
+        b: u16,
+        c: u16,
+    }
+    const SIZE: usize = mem::size_of::<Header>().next_power_of_two();
+    let buf = Aligned::<Header,_>([0_u8; SIZE]);
+    assert_eq!(mem::align_of_val(&buf), mem::align_of::<Header>());
+    let header = unsafe { &*(&buf.value as *const u8 as *const Header) };
+    assert_eq!(header.a, 0);
+    assert_eq!(header.b, 0);
+    assert_eq!(header.c, 0);
+
+    // test custom alignment with page sizes
+    #[repr(align(512))]
+    struct A512();
+    #[repr(align(1024))]
+    struct A1024();
+    #[repr(align(2048))]
+    struct A2048();
+    #[repr(align(4096))]
+    struct A4096();
+
+    let x: Aligned<A512, _> = Aligned([0u8; 3]);
+    let y: Aligned<A1024, _> = Aligned([0u8; 3]);
+    let z: Aligned<A2048, _> = Aligned([0u8; 3]);
+    let w: Aligned<A4096, _> = Aligned([0u8; 3]);
+
+    assert_eq!(mem::align_of_val(&x), 512);
+    assert_eq!(mem::align_of_val(&y), 1024);
+    assert_eq!(mem::align_of_val(&z), 2048);
+    assert_eq!(mem::align_of_val(&w), 4096);
 }
