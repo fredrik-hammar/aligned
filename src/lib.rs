@@ -111,16 +111,26 @@ where
     }
 }
 
-impl<A, T> ops::Index<ops::RangeTo<usize>> for Aligned<A, [T]>
-where
-    A: sealed::Alignment,
-{
-    type Output = Aligned<A, [T]>;
-
-    fn index(&self, range: ops::RangeTo<usize>) -> &Aligned<A, [T]> {
-        unsafe { &*(&self.value[range] as *const [T] as *const Aligned<A, [T]>) }
-    }
+macro_rules! impl_index_to_aligned {
+    ($range_type:path) => {
+        impl<A, T> ops::Index<$range_type> for Aligned<A, [T]>
+        where
+            A: sealed::Alignment,
+        {
+            type Output = Aligned<A, [T]>;
+        
+            fn index(&self, range: $range_type) -> &Aligned<A, [T]> {
+                unsafe { &*(&self.value[range] as *const [T] as *const Aligned<A, [T]>) }
+            }
+        }
+    };
 }
+
+// `a[..]`, `a[..N]`, `a[..=N]` all have the same alignment as `a`.
+// The same is not true for `a[N..]`, `a[N..M]`, `a[N..=M]`.
+impl_index_to_aligned!(ops::RangeTo<usize>);
+impl_index_to_aligned!(ops::RangeFull);
+impl_index_to_aligned!(ops::RangeToInclusive<usize>);
 
 impl<A, T> AsSlice for Aligned<A, T>
 where
